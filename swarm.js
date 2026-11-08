@@ -148,6 +148,7 @@
   const SKIP = new Set([
     "script", "style", "noscript", "template", "head", "meta", "link", "title",
     "base", "datalist", "area", "map", "source", "track", "param", "swarm-rebuild",
+    "swarm-platform-hud", "swarm-steps-guide",
   ]);
   const DROP_IN_CLONE = new Set(["script", "style", "noscript", "template", "iframe", "object", "embed", "link", "meta"]);
   const REPLACED = new Set(["img", "svg", "video", "canvas", "iframe", "embed", "object", "picture"]);
@@ -529,7 +530,25 @@
         ? b.x + b.w > 0 && b.x < docW && b.y + b.h > 0 && b.y < docH
         : b.x + b.w > 0 && b.x < innerWidth && b.y + b.h > 0 && b.y < innerHeight;
 
-    function add(it) {
+    const isPlatformSubsequent = !!(
+      window.__swarmPlatformState &&
+      typeof window.__swarmPlatformState.stepIndex === "number" &&
+      window.__swarmPlatformState.stepIndex > 0
+    );
+
+    function isPersistentShell(el) {
+      if (!el || !el.closest) return false;
+      // Do not treat page content inside <main>, <article>, or content containers as persistent shell
+      if (el.closest("main, [role='main'], article, #main, .main-content")) {
+        // Exception: unless it is explicitly an aside or nav nested for layout
+        if (!el.closest("aside, nav, [role='navigation'], .sidebar, .navbar")) {
+          return false;
+        }
+      }
+      return !!el.closest("aside, nav, [role='banner'], [role='navigation'], .sidebar, .navbar, .nav-bar, .app-header, .app-sidebar, body > header, div > header:first-child");
+    }
+
+    function add(it, el) {
       it.id = items.length;
       it.v = 1;
       it.rv = 0;
@@ -538,6 +557,24 @@
       it.dy = 0;
       it.scale = 1;
       it.mode = "own";
+      if (isPlatformSubsequent && el && isPersistentShell(el)) {
+        it.persisted = true;
+        it.vis = true;
+        it.done = true;
+        it.styled = true;
+        it.mode = "own";
+        if (it.kind === "text") {
+          it.shown = 999999;
+          it.rshown = 999999;
+        }
+        if (it.kind === "rect" || it.kind === "image") {
+          it.draw = null;
+        }
+        if (it.kind === "line" && it.pts) {
+          it.placed = it.pts.length;
+          it.shut = true;
+        }
+      }
       items.push(it);
       return it;
     }
@@ -593,7 +630,7 @@
       return s + "margin:0;box-sizing:border-box;width:100%;height:100%;position:relative;";
     }
 
-    function textItem(base, root, tb, cs, layer, extra) {
+    function textItem(base, root, tb, cs, layer, extra, el) {
       const fs = parseFloat(cs.fontSize) || 16;
       const text = root.textContent.replace(/\s+/g, " ").trim();
       return add({
@@ -607,7 +644,7 @@
         text,
         sig: text,
         ...extra,
-      });
+      }, el);
     }
 
     function emitLeaf(el, cs, r, ctx, key) {
@@ -649,6 +686,8 @@
         tb,
         cs,
         ctx.layer,
+        undefined,
+        el,
       );
     }
 
@@ -676,6 +715,8 @@
         { ...box },
         cs,
         ctx.layer,
+        undefined,
+        el,
       );
     }
 
@@ -763,7 +804,7 @@
         clip: clipFor(r, ctx.clip, ctx.layer),
         parentBox: ctx.boxItem,
         sig: cssText,
-      });
+      }, el);
     }
 
     // Decorative ::before/::after on containers (overlays, glows, standalone icons).
@@ -799,7 +840,8 @@
         }
         const fake = { left: L, top: T, right: L + bw, bottom: T + bh, width: bw, height: bh };
         if (!intersect(ltrb(fake), ctx.clip)) return;
-        emitBox(PSEUDO_EL, ps, fake, { ...ctx, op: ctx.op * pop }, ctx.key(), false);
+        const pseudoProxy = { localName: "pseudo", closest: (s) => (el.closest ? el.closest(s) : null), host: el };
+        emitBox(pseudoProxy, ps, fake, { ...ctx, op: ctx.op * pop }, ctx.key(), false);
       } else {
         const cl = pad.l + n(cs.paddingLeft);
         const ct = pad.t + n(cs.paddingTop);
@@ -825,7 +867,8 @@
         } else return;
         const fake = { left: L, top: T, right: L + w, bottom: T + h, width: w, height: h };
         if (!intersect(ltrb(fake), ctx.clip)) return;
-        emitBox(PSEUDO_EL, ps, fake, { ...ctx, op: ctx.op * pop }, ctx.key(), false);
+        const pseudoProxy = { localName: "pseudo", closest: (s) => (el.closest ? el.closest(s) : null), host: el };
+        emitBox(pseudoProxy, ps, fake, { ...ctx, op: ctx.op * pop }, ctx.key(), false);
       }
     }
 
@@ -957,7 +1000,7 @@
         clip: clipFor(r, ctx.clip, ctx.layer),
         parentBox: ctx.boxItem,
         sig: m.sig,
-      });
+      }, el);
     }
 
     function emitForm(el, cs, r, ctx, key) {
@@ -980,7 +1023,7 @@
           kind: "image", ...b, media: s, frame: "", radius: "0px", shadow: "", bg: "",
           draw: null, styled: false, layer: ctx.layer, key, op: ctx.op, clip: null,
           parentBox: ctx.boxItem, sig: type + on,
-        });
+        }, el);
         return;
       }
       const boxIt = emitBox(el, cs, r, ctx, key, false);
@@ -1012,6 +1055,8 @@
         { ...b },
         cs,
         ctx.layer,
+        undefined,
+        el,
       );
     }
 
@@ -1019,6 +1064,8 @@
       if (items.length >= MAX_ITEMS) return;
       const tag = el.localName;
       if (SKIP.has(tag) || el === env.host) return;
+      if (el.id && (el.id.startsWith("__swarm") || el.id.includes("platform_hud") || el.id.includes("steps_guide"))) return;
+      if (el.closest && el.closest("#__swarm_platform_hud_host, #__swarm_steps_guide_host, swarm-steps-guide, swarm-platform-hud, [data-swarm-ignore]")) return;
       // Skip inactive modals, dialogs, and background WebGL canvas
       if (el.id === "grainient-canvas" || (el.classList && el.classList.contains("grainient-canvas"))) return;
       if (el.closest && el.closest('.modal:not(.active), .quote-modal:not(.active), #quoteModal:not(.active), .social-share-backdrop, .nav-mobile:not(.active)')) return;
@@ -1282,6 +1329,7 @@
     const KIND_TASK = { rect: "rect", image: "image", text: "text", line: "line" };
     for (const it of items) {
       if (it.copyOf) continue;
+      if (it.persisted) continue;
       if (it.twinOf) {
         it.final = it.twinOf.final;
         continue;
@@ -1434,6 +1482,19 @@
         }
       }
     })(live, null);
+    it.live = live;
+    it.units = units;
+    it.seq = seq;
+    it.total = seq.length;
+
+    if (it.persisted) {
+      // Retain full text and visible icons/SVGs on persistent navigation shells
+      it.shown = seq.length;
+      it.rshown = seq.length;
+      reveal(it, seq.length);
+      return;
+    }
+
     for (const u of units) {
       if (u.t) u.t.data = "";
       else {
@@ -1445,10 +1506,6 @@
       b.style.visibility = "hidden";
       b.__on = false;
     }
-    it.live = live;
-    it.units = units;
-    it.seq = seq;
-    it.total = seq.length;
     it.shown = 0;
     it.rshown = 0;
   }
@@ -1696,6 +1753,11 @@
       } else {
         this.bg.style.backgroundColor = pb.color;
       }
+      if (window.__swarmPlatformState && window.__swarmPlatformState.isPlatformRebuild) {
+        this.bg.style.transition = "none";
+        this.bg.style.opacity = "1";
+        this.bg.classList.add("on");
+      }
       if (pb.image && pb.image !== "none") {
         this.bg.style.backgroundImage = pb.image;
         this.bg.style.backgroundSize = pb.size;
@@ -1781,6 +1843,12 @@
           for (const it of list) frag.appendChild(this.makeNode(it));
           (layer === "world" ? this.world : this[layer]).appendChild(frag);
         }
+      // Immediately render all persisted shell items so they appear intact from frame 0
+      for (const it of model.items) {
+        if (it.persisted) {
+          this.renderItem(it);
+        }
+      }
       this.backdrops = (model.backdrops || []).map((b) => {
         const d = document.createElement("div");
         d.className = "bd";
@@ -1914,7 +1982,13 @@
           n.textContent = "";
           n.appendChild(content);
         }
-        if (it.mode !== "master" && it.rshown !== it.shown) {
+        if (it.persisted) {
+          if (it.rshown !== it.total) {
+            it._last = reveal(it, it.total);
+            it.shown = it.total;
+            it.rshown = it.total;
+          }
+        } else if (it.mode !== "master" && it.rshown !== it.shown) {
           it._last = reveal(it, it.shown);
           it.rshown = it.shown;
         }
@@ -3552,6 +3626,10 @@
       const mark = (k) => (this.timing[k] = Math.round(performance.now() - this.t0));
       await sleep(520);
       await unhidePage();
+      try {
+        const oldH = document.getElementById("__swarm_hide_style");
+        if (oldH) oldH.remove();
+      } catch (_) {}
       mark("blank");
       if (this.dead) return;
       // Reveal elements hidden by scroll animations (IntersectionObserver, AOS, animate-on-scroll)
@@ -3593,7 +3671,7 @@
         if (!hStyle) {
           hStyle = document.createElement("style");
           hStyle.id = "__swarm_hide_style";
-          hStyle.textContent = "html > body > *:not(swarm-rebuild) { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }";
+          hStyle.textContent = "html > body > *:not(swarm-rebuild):not(#__swarm_platform_hud_host):not([data-swarm-ignore]) { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }";
           document.head.appendChild(hStyle);
         }
       } catch(_) {}
@@ -3835,6 +3913,8 @@
         setTimeout(() => {
           this.view.host.remove();
           try {
+            const hStyle = document.getElementById("__swarm_hide_style");
+            if (hStyle) hStyle.remove();
             document.documentElement.style.removeProperty("scroll-behavior");
             if (document.body) document.body.style.removeProperty("scroll-behavior");
             for (const v of document.querySelectorAll("video")) {
@@ -3876,6 +3956,20 @@
     const a = app;
     app = null;
     a.destroy(reveal);
+    if (!reveal) {
+      try {
+        const phud = document.getElementById("__swarm_platform_hud_host");
+        if (phud) phud.remove();
+        const curtain = document.getElementById("__swarm_blank_curtain");
+        if (curtain) curtain.remove();
+        if (window.__swarmPlatformState) {
+          window.__swarmPlatformState.isPlatformRebuild = false;
+        }
+        if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({ type: "swarm:cancel_platform_rebuild" });
+        }
+      } catch (_) {}
+    }
   }
 
   function restart() {

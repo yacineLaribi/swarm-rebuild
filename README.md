@@ -51,6 +51,7 @@ flowchart LR
   - Pre-renders elements with CSS scroll transitions (`.animate-on-scroll`, `data-aos`, Bento grids) so no content is discarded.
   - Automatically filters out inactive modals (`#quoteModal`, overlay backdrops) for a noise-free reconstruction.
 - 💎 **Instant Live Restore:** Press <kbd>Esc</kbd> or click **Go Live** at any moment to fade cleanly back to the real interactive webpage.
+- 🗺️ **Multi-Page Steps Guide (`swarm-steps-guide.js`):** Automatically discovers internal navigation links across multi-page websites or SPA routes, builds a sequential step checklist, and simulates/pre-rebuilds blueprints for each page (measuring DOM depth, typography, media, and agent allocations with live wireframe previews) before launching the overall Swarm Rebuild.
 
 ---
 
@@ -116,11 +117,53 @@ Install locally in under 30 seconds:
 | Action | Control | Description |
 | :--- | :---: | :--- |
 | **Trigger / Toggle** | <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> | Starts or stops the extension |
+| **Multi-Page Steps Guide** | <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd> | Opens the multi-page pre-flight guide and blueprint analyzer |
 | **Exit Instantly** | <kbd>Esc</kbd> | Closes the canvas and restores the original website |
 | **Toggle Tour** | `Tour` button in HUD | Toggles auto-scroll mode on / off |
 | **Speed Control** | `1×` / `2×` / `3×` | Cycles build velocity |
 | **Mute / Unmute** | <kbd>M</kbd> or 🔊 icon | Toggles procedural sound effects |
 | **Go Live** | `Go Live` button | Gracefully fades back to the live interactive page |
+
+---
+
+## 🗺️ Multi-Page Steps Guide (`swarm-steps-guide.js`)
+
+When documenting or showcasing larger multi-page portfolios, blogs, and web applications, Swarm Rebuild includes a dedicated, non-intrusive companion script: **`swarm-steps-guide.js`**.
+
+```mermaid
+flowchart TD
+    Scan["Auto-Discover Internal Routes (/about, /projects, /contact)"] --> StepPlan["Generate Step-by-Step Rebuild Guide"]
+    StepPlan --> PreFlight["Check & Simulate Blueprint Rebuild for Each Page"]
+    PreFlight --> Wireframes["Preview Blueprint Metrics & Wireframe Layouts"]
+    Wireframes --> Launch["Launch Swarm Rebuild Overall (or Auto-Tour Pages)"]
+    
+    style Scan fill:#0d0d12,stroke:#1abcfe,stroke-width:1.5px,color:#fff
+    style StepPlan fill:#0d0d12,stroke:#c9a96e,stroke-width:1.5px,color:#fff
+    style PreFlight fill:#0d0d12,stroke:#c9a96e,stroke-width:1.5px,color:#fff
+    style Wireframes fill:#0d0d12,stroke:#0acf83,stroke-width:1.5px,color:#fff
+    style Launch fill:#0d0d12,stroke:#c9a96e,stroke-width:2px,color:#fff
+```
+
+### What It Does:
+1. **Intelligent Route Discovery:** Automatically scans internal navigation elements (`<nav>`, `<header>`, `<aside>`, router links) on the current domain and organizes them into a clean rebuild pipeline (`Target 01: Home`, `Step 02: Projects`, `Step 03: About`, etc.).
+2. **Pre-Flight "Supposed Rebuild" Simulation:** For each discovered page, the engine fetches and pre-analyzes the DOM structure:
+   - Evaluates node counts, typography blocks, media tags (canvases, videos, images), and interactive elements.
+   - Computes an estimated swarm cursor count and rebuild duration.
+   - Generates an interactive **Blueprint Wireframe** preview detailing how agents will be assigned before launching.
+3. **Obsidian & Gold Steps HUD:** An isolated Shadow DOM modal with real-time progress meters, procedural sound synthesis, custom route input, and auto-tour sequence options.
+4. **Autonomous Platform Rebuild & Navigation Orchestrator:** Sequentially navigates across pages via `background.js`, auto-injecting the swarm so entire multi-page platforms are reconstructed from scratch.
+5. **Smart Persistent Shell Optimization (SPA / React Mode):** When sequentially rebuilding multiple pages, persistent layout components (headers, sidebars, navigation shells) are preserved after Step 1. The swarm avoids wiping or re-drawing persistent navigation from scratch on subsequent steps, focusing cursor workers exclusively on the newly changed dynamic content.
+6. **Zero-Flicker Instant Blank Transitions:** When navigating between pages or switching sections, an instant dark obsidian curtain blankets the screen from the very first paint of navigation (`status: 'loading'`). All DOM scans, font loading, and blueprint captures complete entirely behind the blanks, ensuring the user only ever sees a clean blank slate before cursor agents begin reconstructing the page.
+
+### How to Use the Steps Guide:
+- **Shortcut:** Press <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd> on any page.
+- **Standalone:** Include `<script src="swarm-steps-guide.js"></script>` in any HTML file.
+- **Console / DevTools:**
+  ```javascript
+  window.__swarmStepsGuide.open();
+  await window.__swarmStepsGuide.runChecks();
+  window.__swarmStepsGuide.launchOverall();
+  ```
 
 ---
 
